@@ -61,7 +61,7 @@ public class CSE535Assignment{
      processArgs(args);
      readInputAndBuildIndexFile();
      getTopKTerms();
-     //processQueryFile();
+     processQueryFile();
    }catch(Exception e){
      e.printStackTrace();
    }
@@ -71,6 +71,37 @@ private static void processQueryFile() throws Exception{
   if(!checkFileRead(queryTermFile)){
     throw new Exception("Cannot read " + queryTermFile);
   }
+  BufferedReader queryTermReader = new BufferedReader(new FileReader(queryTermFile));
+  String currentLine;
+  String[] terms;
+  Map<String,Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
+  while((currentLine = queryTermReader.readLine()) != null){
+    terms = currentLine.split(" ");
+    if(terms.length <= 0){
+      continue;}
+    termPostings = getTermPostings(currentLine.split(" "));
+    System.out.println("termPostings: " + Arrays.toString(termPostings.entrySet().toArray()));
+  }
+}
+
+private static Map<String,Map<String, LinkedList<Integer>>> getTermPostings(String[] terms)throws Exception{
+  Map<String,Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
+  for(String term: terms){
+    Object postings = getPostings(term);
+    if(postings != null){
+      if(postings instanceof Map){
+        termPostings.put(term, getPostings(term));
+      }
+    }
+  }
+  return termPostings;
+}
+
+private static Map<String, LinkedList<Integer>> getPostings(String term){
+  if(postingsMap.containsKey(term)){
+    return postingsMap.get(term);
+  }
+return null;
 }
 
 private static void getTopKTerms(){
