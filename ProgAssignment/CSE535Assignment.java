@@ -1,5 +1,4 @@
 /*
-
 Author: Prasad Shivanna
 Date: Oct 17 2015
 
@@ -52,15 +51,16 @@ public class CSE535Assignment{
 
  private static int numberOfTopTerms;
  private static  String postingsFile, outputFile, queryTermFile;
+
  private static Map<Integer, Set<String>> termFrequencyTermMap;
  private static Map<String, Map<String,LinkedList<Integer>>> postingsMap;
 
  public static void main(String[] args){
-
    try{
      processArgs(args);
      readInputAndBuildIndexFile();
      getTopKTerms();
+     //CheckOutputFile();
      processQueryFile();
    }catch(Exception e){
      e.printStackTrace();
@@ -69,39 +69,305 @@ public class CSE535Assignment{
 
 private static void processQueryFile() throws Exception{
   if(!checkFileRead(queryTermFile)){
-    throw new Exception("Cannot read " + queryTermFile);
-  }
+    throw new Exception("Cannot read " + queryTermFile);}
   BufferedReader queryTermReader = new BufferedReader(new FileReader(queryTermFile));
   String currentLine;
   String[] terms;
-  Map<String,Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
+  LinkedList<Integer> result = new LinkedList<>();
+  Map<String, Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
+  Map<String, LinkedList<Integer>> tAATPostings = new HashMap<>();
+  Map<String, LinkedList<Integer>> dAATPostings = new HashMap<>();
   while((currentLine = queryTermReader.readLine()) != null){
     terms = currentLine.split(" ");
-    if(terms.length <= 0){
-      continue;}
     termPostings = getTermPostings(currentLine.split(" "));
-    System.out.println("termPostings: " + Arrays.toString(termPostings.entrySet().toArray()));
+    tAATPostings = getSpecificPostings(termPostings,POSTINGBYDOCIDINCREASE);
+    dAATPostings = getSpecificPostings(termPostings,POSTINGBYTERMFREQDECREASE);
+    termAtATimeQueryAnd(tAATPostings);
+    termAtATimeQueryOr(tAATPostings);
+    docAtATimeQueryAnd(dAATPostings);
+    docAtATimeQueryOr(dAATPostings);
   }
 }
 
-private static Map<String,Map<String, LinkedList<Integer>>> getTermPostings(String[] terms)throws Exception{
-  Map<String,Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
-  for(String term: terms){
-    Object postings = getPostings(term);
-    if(postings != null){
-      if(postings instanceof Map){
-        termPostings.put(term, getPostings(term));
-      }
+private static Map<String, LinkedList<Integer>> getSpecificPostings(Map<String, Map<String, LinkedList<Integer>>> arg,String postingType ){
+  Map<String, LinkedList<Integer>> result = new HashMap<>();
+  for(Map.Entry<String, Map<String, LinkedList<Integer>>> entry : arg.entrySet()){
+    result.put(entry.getKey(), entry.getValue().get(postingType));
+  }return result;
+}
+
+private static void print(String msg){
+  System.out.println(msg);}
+
+private static void termAtATimeQueryAnd(Map<String, LinkedList<Integer>> termPostings){
+  StringBuilder output = new StringBuilder();
+  LinkedList<Integer> result = new LinkedList<>();
+  int numOfCompares = 0;
+  long start = System.currentTimeMillis();
+  output.append("FUNCTION: termAtATimeQueryAnd ");
+  output.append(Arrays.toString(termPostings.keySet().toArray(new String[0])).replace("[","").replace("]","").trim() + "\n");
+  if(termPostings == null || termPostings.size() == 0){
+    }
+  else if(termPostings.size() == 1){
+    result = termPostings.get(termPostings.keySet().toArray()[0]);
+  }
+  else if(termPostings.size() >= 2){
+    String[] terms = termPostings.keySet().toArray(new String[0]);
+    result = termPostings.get(terms[0]);
+    for(String term : Arrays.copyOfRange(terms,1,terms.length)){
+      result = termAnd(result, termPostings.get(term));
+      numOfCompares += result.removeLast();
+    }}
+  long diff = System.currentTimeMillis() - start;
+  float timeUsed = diff/1000;
+  output.append(Integer.toString(result.size())+" documents are found\n");
+  output.append(Integer.toString(numOfCompares)+" comparisions are made\n");
+  output.append( String.format("%.02f", timeUsed)+" seconds are used\n");
+  output.append("Result: " + Arrays.toString(result.toArray()).replace("[","").replace("]","") + "\n");
+  print(output.toString());
+}
+
+private static LinkedList<Integer> termAnd(LinkedList<Integer> arg1, LinkedList<Integer> arg2){
+  LinkedList<Integer> result  =  new LinkedList<>();
+  int numOfCompares = 0;
+  ListIterator<Integer> arg1Iterator = arg1.listIterator();
+  ListIterator<Integer> arg2Iterator = arg2.listIterator();
+  int list1Item = -1, list2Item = -1;
+  while(arg1Iterator.hasNext()){
+    list1Item = arg1Iterator.next();
+    while(arg2Iterator.hasNext()){
+        list2Item = arg2Iterator.next();
+        numOfCompares++;
+        if(list1Item == list2Item){
+          result.add(list1Item);
+          if(arg1Iterator.hasNext()){   list1Item = arg1Iterator.next();}
+        }}}    result.addLast(numOfCompares);
+  return result;
+}
+
+private static boolean elementExists(TreeSet<Integer> arg, int element){
+  boolean result = false;
+  Iterator<Integer> iterator = arg.iterator();
+  int num = -1;
+  while(iterator.hasNext()){
+    num = iterator.next();
+    if(num == element){ result = true; break;}
+    else if(num > element){ break;}
+  } return result;
+}
+private static LinkedList<Integer> termOr(LinkedList<Integer> arg1, LinkedList<Integer> arg2){
+  if(arg1.size() == 0){ arg2.add(0); return arg2;}
+  TreeSet<Integer> result  =  new TreeSet<>(arg1);
+  int numOfCompares = 0;
+  ListIterator<Integer> arg1Iterator = arg1.listIterator();
+  ListIterator<Integer> arg2Iterator = arg2.listIterator();
+  int list1Item = -1, list2Item = -1;
+
+  while(arg2Iterator.hasNext()){
+    list2Item = arg2Iterator.next();
+    numOfCompares++;
+    if(!elementExists(result,list2Item)){
+        result.add(list2Item);
     }
   }
+  LinkedList<Integer> response = new LinkedList<Integer>(result);
+  response.addLast(numOfCompares);
+  return response;
+}
+
+private static void termAtATimeQueryOr(Map<String, LinkedList<Integer>> termPostings){
+  StringBuilder output = new StringBuilder();
+  LinkedList<Integer> result = new LinkedList<>();
+  int numOfCompares = 0;
+  long start = System.currentTimeMillis();
+  output.append("FUNCTION: termAtATimeQueryOr ");
+  output.append(Arrays.toString(termPostings.keySet().toArray(new String[0])).replace("[","").replace("]","").trim() + "\n");
+  if(termPostings == null || termPostings.size() == 0){
+    }
+  else if(termPostings.size() == 1){
+    result = termPostings.get(termPostings.keySet().toArray()[0]);
+  }
+  else if(termPostings.size() >= 2){
+    String[] terms = termPostings.keySet().toArray(new String[0]);
+    result = termPostings.get(terms[0]);
+    for(String term : Arrays.copyOfRange(terms,1,terms.length)){
+      result = termOr(result, termPostings.get(term));
+      numOfCompares += result.removeLast();
+    }}
+  long diff = System.currentTimeMillis() - start;
+  float timeUsed = diff/1000;
+  output.append(Integer.toString(result.size())+" documents are found\n");
+  output.append(Integer.toString(numOfCompares)+" comparisions are made\n");
+  output.append( String.format("%.02f", timeUsed)+" seconds are used\n");
+  output.append("Result: " + Arrays.toString(result.toArray()).replace("[","").replace("]","") + "\n");
+  print(output.toString());
+}
+
+private static LinkedList<Integer> docAtATimeQueryAnd(Map<String, LinkedList<Integer>> termPostings){
+  StringBuilder output = new StringBuilder();
+  LinkedList<Integer> result  =  new LinkedList<>();
+  int numOfCompares = 0;
+  long start = System.currentTimeMillis();
+  output.append("FUNCTION: docAtATimeQueryAnd ");
+  output.append(Arrays.toString(termPostings.keySet().toArray(new String[0])).replace("[","").replace("]","").trim() + "\n");
+  ArrayList<LinkedList<Integer>> iteratorList = new ArrayList<>();
+  for(LinkedList<Integer> value : termPostings.values()){
+    //print("val size : " + Integer.toString(value.size()));
+    if(value.size() > 1){
+      iteratorList.add(value);
+    }
+  }
+  if(iteratorList.size() > 1){
+  result = daatAnd(iteratorList); }
+  else if(iteratorList.size() == 1 && iteratorList.size() == termPostings.size())
+    result = iteratorList.get(0);
+  long diff = System.currentTimeMillis() - start;
+  float timeUsed = diff/1000;
+  output.append(Integer.toString(result.size())+" documents are found\n");
+  output.append(Integer.toString(numOfCompares)+" comparisions are made\n");
+  output.append( String.format("%.02f", timeUsed)+" seconds are used\n");
+  output.append("Result: " + Arrays.toString(result.toArray()).replace("[","").replace("]","") + "\n");
+  print(output.toString());
+
+    return result;
+}
+
+private static Integer sum(Integer[] arg){
+  Integer sum = 0;
+  for(Integer num: arg){
+    sum += num;
+  }
+  return sum;
+}
+
+private static LinkedList<Integer> daatAnd(ArrayList<LinkedList<Integer>> iteratorList){
+  LinkedList<Integer> result = new LinkedList<>();
+  Integer[] nums = new Integer[iteratorList.size()];
+  Integer[] indices =  new Integer[iteratorList.size()];
+  int i = 0;
+  Integer min;
+  for(i = 0 ; i < iteratorList.size(); i++){
+    if(iteratorList.get(i).size() > 0 ){
+      nums[i] = iteratorList.get(i).get(0);
+      indices[i] = 0;
+    }}
+    print("inti: " + Arrays.toString(nums));
+  while(true){
+      min = Collections.min(Arrays.asList(nums));
+      if(min != Integer.MAX_VALUE && sum(nums) == (iteratorList.size()*min)){
+      result.add(min);}
+      for(i = 0 ; i < iteratorList.size(); i++){
+        if(indices[i] < iteratorList.get(i).size()){
+        if(iteratorList.get(i).get(indices[i]) == min){
+          indices[i]++;
+          if(indices[i] < iteratorList.get(i).size()){
+          nums[i] = iteratorList.get(i).get(indices[i]);
+        }  else{   indices[i] = nums[i] = Integer.MAX_VALUE; }
+          }}
+
+        }
+
+      if(min == Integer.MAX_VALUE){
+        break;
+      }
+    }
+  return result;
+}
+
+private static LinkedList<Integer> docAtATimeQueryOr(Map<String, LinkedList<Integer>> termPostings){
+  StringBuilder output = new StringBuilder();
+  LinkedList<Integer> result  =  new LinkedList<>();
+  int numOfCompares = 0;
+  long start = System.currentTimeMillis();
+  output.append("FUNCTION: docAtATimeQueryOr ");
+  output.append(Arrays.toString(termPostings.keySet().toArray(new String[0])).replace("[","").replace("]","").trim() + "\n");
+  ArrayList<LinkedList<Integer>> iteratorList = new ArrayList<>();
+  for(LinkedList<Integer> value : termPostings.values()){
+    //print("val size : " + Integer.toString(value.size()));
+    if(value.size() > 1){
+      iteratorList.add(value);
+    }
+  }
+  if(iteratorList.size() > 1){
+  result = daatOr(iteratorList); }
+  else if(iteratorList.size() == 1)
+    result = iteratorList.get(0);
+
+  long diff = System.currentTimeMillis() - start;
+  float timeUsed = diff/1000;
+  output.append(Integer.toString(result.size())+" documents are found\n");
+  output.append(Integer.toString(numOfCompares)+" comparisions are made\n");
+  output.append( String.format("%.02f", timeUsed)+" seconds are used\n");
+  output.append("Result: " + Arrays.toString(result.toArray()).replace("[","").replace("]","") + "\n");
+  print(output.toString());
+
+    return result;
+}
+
+
+private static LinkedList<Integer> daatOr(ArrayList<LinkedList<Integer>> iteratorList){
+  LinkedList<Integer> result = new LinkedList<>();
+  Integer[] nums = new Integer[iteratorList.size()];
+  Integer[] indices =  new Integer[iteratorList.size()];
+  int i = 0;
+  Integer min;
+  for(i = 0 ; i < iteratorList.size(); i++){
+    if(iteratorList.get(i).size() > 0 ){
+      nums[i] = iteratorList.get(i).get(0);
+      indices[i] = 0;
+    }}
+
+  while(true){
+      min = Collections.min(Arrays.asList(nums));
+      if(min != Integer.MAX_VALUE){
+      result.add(min);}
+      for(i = 0 ; i < iteratorList.size(); i++){
+        if(indices[i] < iteratorList.get(i).size()){
+        if(iteratorList.get(i).get(indices[i]) == min){
+          indices[i]++;
+          if(indices[i] < iteratorList.get(i).size()){
+          nums[i] = iteratorList.get(i).get(indices[i]);
+        }  else{   indices[i] = nums[i] = Integer.MAX_VALUE; }
+          }}
+
+        }
+
+      if(min == Integer.MAX_VALUE){
+        break;
+      }
+    }
+  return result;
+}
+
+private static Map<String, Map<String, LinkedList<Integer>>> getTermPostings(String[] terms)throws Exception{
+  Map<String, Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
+   Map<String, LinkedList<Integer>> postings;
+  for(String term: terms){
+     postings = getPostings(term);
+    if(postings != null && (postings instanceof HashMap)){
+        termPostings.put(term, postings);
+    }}
   return termPostings;
 }
 
 private static Map<String, LinkedList<Integer>> getPostings(String term){
+  StringBuilder result = new StringBuilder();
+  Map<String, LinkedList<Integer>> response = new HashMap<>();
+  result.append("FUNCTION: getPostings " + term + "\n");
   if(postingsMap.containsKey(term)){
-    return postingsMap.get(term);
-  }
-return null;
+    response = postingsMap.get(term);
+    String byDocId = Arrays.toString(response.get(POSTINGBYDOCIDINCREASE).toArray());
+    String byTF = Arrays.toString(response.get(POSTINGBYTERMFREQDECREASE).toArray());
+    result.append("Ordered by doc IDs: " + byDocId.replace("[","").replaceAll("]","").trim() + "\n");
+    result.append("Ordered by TF: " + byTF.replace("[","").replaceAll("]","").trim() +"\n");
+  }else{
+      result.append("term not found\n");
+      response = new HashMap<>();
+      response.put(POSTINGBYDOCIDINCREASE, new LinkedList<Integer>());
+      response.put(POSTINGBYTERMFREQDECREASE, new LinkedList<Integer>());
+    }
+  print(result.toString());
+  return response;
 }
 
 private static void getTopKTerms(){
@@ -109,6 +375,8 @@ private static void getTopKTerms(){
   Collections.reverse(termFrequencies);
   Set<String> terms = null;
   int count = 0;
+  boolean exitStatus = false;
+  String result= "FUNCTION: getTopK " + Integer.toString(numberOfTopTerms) + "\n";
   StringBuilder output = new StringBuilder();
   for(Integer termFrequency : termFrequencies){
     terms = termFrequencyTermMap.get(termFrequency);
@@ -116,11 +384,17 @@ private static void getTopKTerms(){
       for(String term: terms){
         output.append(term + ", ");
         if(++count == numberOfTopTerms){
-          System.out.println("topK: " + output.toString().trim().replaceAll(",$",""));
-          return;
-        }}
+          exitStatus = true;
+          break;
+        }
+      }
+      if(exitStatus){
+        break;
+      }
     }
   }
+  result = result + "Result: " + output.toString().trim().replaceAll(",$","");
+  System.out.println(result);
 }
 
 // Function to process the arguments recieved
@@ -155,8 +429,7 @@ private static boolean checkFileRead(String fileName) throws Exception{
    String[] postingList;
    BufferedReader postingsReader = null;
    if(!checkFileRead(postingsFile)){
-     throw new Exception("Cannot Read " + postingsFile );
-   }
+     throw new Exception("Cannot Read " + postingsFile ); }
    termFrequencyTermMap = new HashMap<>();
    postingsMap = new HashMap<>();
    postingsReader = new BufferedReader(new FileReader(postingsFile));

@@ -1,2 +1,5 @@
-hard hand
-move lower expect
+is
+is as
+is was
+is as was
+not is
