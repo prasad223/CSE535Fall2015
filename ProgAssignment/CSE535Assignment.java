@@ -29,17 +29,24 @@ import java.io.*;
 import java.util.*;
 
 public class CSE535Assignment{
-    // List of variables and constants required
+
+    //Constants used to split terms and identify term,posting size and posting list
     private static final int NUMBEROFARGS = 4;
     private static final String TERMSPLITTER = "\\\\c";
     private static final String TERMFREQUENCYSPLITTER = "\\\\m";
+    // Constants to identify the posting type in the posting lists
     private static final String POSTINGBYDOCIDINCREASE = "PostingByDocIDIncrease";
     private static final String POSTINGBYTERMFREQDECREASE = "PostingByTermFreqDecrease";
 
+    // File writer object to write to output file specified in CMD line args
     private static BufferedWriter logFileWriter;
+    // Map containing the terms with their respective frequencies used to obtain topk terms
     private static TreeMap<Integer, Set<String>> termFrequencyTermMap;
+    // Global map contianing the posting list
+    // Each Term points to a map,which contains { postingType : <list of doc ids arranged by the posting strategy specified > }
     private static Map<String, Map<String,LinkedList<Integer>>> postingsMap;
 
+    // Entry point to the code
     public static void main(String[] args){
         try{
             readInputAndBuildIndexFile(args[0]);
@@ -53,7 +60,7 @@ public class CSE535Assignment{
             e.printStackTrace();
         }    }
 
-    // Creates the output File and assigns the BufferedWriter object
+    // Creates the output File and assigns the BufferedWriter object and throws Exception if unable to create file writer object
     private static void createOutputFile(String outputFile)throws Exception{
       try{
         File logFile = new File(outputFile);
@@ -63,7 +70,17 @@ public class CSE535Assignment{
       }
     }
 
-    // Takes query File as Input and performs all the required computations and writes it to the file
+    /*
+      Takes query File as Input and performs all the required computations and writes it to the file
+      List of operations performed
+      1) Getting postings individually for each term
+      2) term postings contains the mini map, each term pointing to a map of posting type
+      3) get specific postings required by the taat and daat operations specifically
+      4) Perform termAtATimeQueryAnd operation on the returned by the getSpecificPostings()
+      5) Perform termAtATimeQueryOr operation on the returned by the getSpecificPostings()
+      6) Perform docAtATimeQueryAnd operation on the returned by the getSpecificPostings()
+      7) Perform docAtATimeQueryOr operation on the returned by the getSpecificPostings()
+    */
     private static void processQueryFile(String queryTermFile) throws Exception{
         if(!checkFileRead(queryTermFile)){
             throw new Exception("Cannot read " + queryTermFile);}
@@ -86,7 +103,9 @@ public class CSE535Assignment{
         }
     }
 
-    //Returns the specific type of postings required by the caller function
+    /*
+      Returns the specific type of postings required by the caller function
+    */
     private static Map<String, LinkedList<Integer>> getSpecificPostings(Map<String, Map<String, LinkedList<Integer>>> arg,String postingType ){
         Map<String, LinkedList<Integer>> result = new HashMap<>();
         for(Map.Entry<String, Map<String, LinkedList<Integer>>> entry : arg.entrySet()){
@@ -94,7 +113,7 @@ public class CSE535Assignment{
         }return result;
     }
 
-    //Writes the given string to the output File as given in command line arguments
+    //Writes the given string to the output File specified in command line arguments
     private static void writeToOutputFile(String msg){
       try{
         if(logFileWriter != null){
@@ -107,7 +126,15 @@ public class CSE535Assignment{
       }
     }
 
-    //Performs the termAtATimeQueryAnd operation on the given posting List of files
+    /*
+    Performs the termAtATimeQueryAnd operation on the given posting lists
+      It handles cases where
+      1) posting list is null, and
+      2) if one the the terms is not found , then it prematurely decides And operation cannot be performed
+      3) If everything is well, then iteratively performs termAtATimeQueryAnd operation by taking 2 posting lists at a time
+      4) It performs optimization on the posting lists to implement the optional bonus part
+      5) Prepares rest of the data required by the output
+    */
     private static void termAtATimeQueryAnd(Map<String, LinkedList<Integer>> termPostings){
         StringBuilder output = new StringBuilder();
         LinkedList<Integer> result = new LinkedList<>();
@@ -131,7 +158,7 @@ public class CSE535Assignment{
         double diff= (System.currentTimeMillis() - start)/1000;
         output.append(Integer.toString(result.size())+" documents are found\n");
         output.append(Integer.toString(numOfCompares)+" comparisions are made\n");
-        output.append(Integer.toString(optimisedCompares)+" comparisions are made with optimization\n");
+        output.append(Integer.toString(optimisedCompares)+" comparisions are made with optimization()\n");
         output.append(Double.toString(diff)+" seconds are used\n");
         output.append("Result: " + Arrays.toString(result.toArray()).replace("[","").replace("]","") + "\n");
         writeToOutputFile(output.toString());
@@ -158,7 +185,12 @@ public class CSE535Assignment{
         return numOfCompares;
     }
 
-    //Performs And operation on given two posting lists
+    /*
+      Performs And operation on given two posting lists
+      Returns the AND intersection of the two lists
+      Runs in O(M*N) time as no optimization can be performed, where M and N are sizes of arguments (1 and 2)
+      but tries to save some comparisions by breaking out of the loop once a match is obtained
+    */
     private static LinkedList<Integer> termAnd(LinkedList<Integer> arg1, LinkedList<Integer> arg2){
         LinkedList<Integer> result  =  new LinkedList<>();
         int numOfCompares = 0, list1Item;
@@ -172,11 +204,15 @@ public class CSE535Assignment{
                 }
             }
         }
+        Collections.sort(result);
         result.addLast(numOfCompares);
         return result;
     }
 
-    //Checks whether the given element is present in the given list
+    /*
+    Checks whether a given element is already present in the given Collection
+    returns a boolean response
+    */
     private static boolean elementExists(TreeSet<Integer> arg, int element){
         boolean result = false;
         Iterator<Integer> iterator = arg.iterator();
@@ -188,9 +224,14 @@ public class CSE535Assignment{
         } return result;
     }
 
-    //Performs Or operation on the given two posting lists
+    /*
+    Performs Or operation on the given two posting lists
+    Performs premature optimization by finding if any one of the lists are null
+    number of comparisons are appended at the end of the list and extracted by the caller to keep an accurate count
+    */
     private static LinkedList<Integer> termOr(LinkedList<Integer> arg1, LinkedList<Integer> arg2){
         if(arg1.size() == 0){ arg2.add(0); return arg2;}
+        if(arg2.size() == 0){ arg1.add(0); return arg1;}
         TreeSet<Integer> result  =  new TreeSet<>(arg1);
         int numOfCompares = 0;
         ListIterator<Integer> arg1Iterator = arg1.listIterator();
@@ -209,7 +250,15 @@ public class CSE535Assignment{
         return response;
     }
 
-    // Performs the termAtATimeQueryOr for the given list of posting lists
+    /*
+    Performs the termAtATimeQueryOr operation on the given posting lists
+      It handles cases where
+      1) posting list is null, and
+      2) if one the the terms is not found , then it performs OR on remaining lists
+      3) If everything is well, then iteratively performs termAtATimeQueryAnd operation by taking 2 posting lists at a time
+      4) It performs optimization on the posting lists to implement the optional bonus part
+      5) Prepares rest of the data required by the output
+    */
     private static void termAtATimeQueryOr(Map<String, LinkedList<Integer>> termPostings){
         StringBuilder output = new StringBuilder();
         LinkedList<Integer> result = new LinkedList<>();
@@ -237,7 +286,31 @@ public class CSE535Assignment{
         writeToOutputFile(output.toString());
     }
 
-    // Performs docAtATimeQueryAnd for the given list of posting lists with setting up output and performing additional checks
+    /*
+    Performs the docAtATimeQueryAnd operation on the given posting lists
+      It handles cases where
+      1) posting list is null, and
+      2) if one the the terms is not found , then it prematurely decides And operation cannot be performed
+      3) If everything is well, then concurrently performs And opertion by following the below mentioned algorithm
+        Algorithm: docAtATimeQueryAnd ( list(postingLists of size N))
+            Array nums of size N: to store the current element being tracked
+            Array indices of size N: to the store the indices of the current element being tracked
+
+            While( All the lists are exhausted)
+            {
+              min = getMin(nums);
+              result.add(min);
+              update the indices and nums of the lists who have min
+              if the index > list.size()
+                set it to Integer.MAX_VALUE
+
+              //Exit conditon
+              if(min  = Integer.MAX_VALUE)
+                This indicates all the lists have been exhausted
+                hence the function terminates
+              }
+
+        */
     private static LinkedList<Integer> docAtATimeQueryAnd(Map<String, LinkedList<Integer>> termPostings){
         StringBuilder output = new StringBuilder();
         LinkedList<Integer> result  =  new LinkedList<>();
@@ -251,12 +324,16 @@ public class CSE535Assignment{
                 iteratorList.add(value);
             }
         }
-        if(iteratorList.size() > 1){
+        if(iteratorList.size() < termPostings.size()){
+          numOfCompares = 0;
+        }
+        else if(iteratorList.size() == 1){
+          result = iteratorList.get(0);
+        }
+        else if(iteratorList.size() > 1){
             result = daatAnd(iteratorList);
             numOfCompares = result.removeLast();
         }
-        else if(iteratorList.size() == 1 && iteratorList.size() == termPostings.size())
-            result = iteratorList.get(0);
         double diff= (System.currentTimeMillis() - start)/1000;
         output.append(Integer.toString(result.size())+" documents are found\n");
         output.append(Integer.toString(numOfCompares)+" comparisions are made\n");
@@ -275,8 +352,24 @@ public class CSE535Assignment{
         return sum;
     }
 
-    // Performs docAtATimeQueryAnd operation on given list of posting lists
-    private static LinkedList<Integer> daatAnd(ArrayList<LinkedList<Integer>> iteratorList){
+    /*
+    Algorithm: daatAnd ( list(postingLists of size N))
+        Array nums of size N: to store the current element being tracked
+        Array indices of size N: to the store the indices of the current element being tracked
+
+        While( All the lists are exhausted)
+        {
+          min = getMin(nums);
+          result.add(min);
+          update the indices and nums of the lists who have min
+          if the index > list.size() //Exit conditon
+            set it to Integer.MAX_VALUE // If anyone of the list is exhausted , then no AND operation can be performed further
+          if(max(nums)  = Integer.MAX_VALUE) // exit function
+            This indicates one of the lists have been exhausted
+            hence the function terminates
+          }
+          */
+      private static LinkedList<Integer> daatAnd(ArrayList<LinkedList<Integer>> iteratorList){
         LinkedList<Integer> result = new LinkedList<>();
         Integer[] nums = new Integer[iteratorList.size()];
         Integer[] indices =  new Integer[iteratorList.size()];
@@ -310,7 +403,13 @@ public class CSE535Assignment{
         return result;
     }
 
-    // Performs docAtATimeQueryOr operation on given list of posting lists with setting up output and performing additional checks
+    /*
+    Performs the docAtATimeQueryOr operation on the given posting lists
+      It handles cases where
+      1) posting list is null, and
+      2) if one the the terms is not found , then it prematurely removes such lists
+      3) If everything is well, then concurrently performs OR opertion by following the below algorithm mentioned in daatOr function
+        */
     private static LinkedList<Integer> docAtATimeQueryOr(Map<String, LinkedList<Integer>> termPostings)throws Exception{
         StringBuilder output = new StringBuilder();
         LinkedList<Integer> result  =  new LinkedList<>();
@@ -340,7 +439,26 @@ public class CSE535Assignment{
         return result;
     }
 
-    // Performs docAtATimeQueryOr operation on given list of posting lists
+    /*
+    Algorithm: daatOr ( list(postingLists of size N))
+        Array nums of size N: to store the current element being tracked
+        Array indices of size N: to the store the indices of the current element being tracked
+
+        While( All the lists are exhausted)
+        {
+          min = getMin(nums);
+          if( min*N == sum(nums)) // This works only if doc Ids is numbers ,
+                                  // it exploits the property of numbers by taking the min and matching it with the number of occurences
+          result.add(min);
+          update the indices and nums of the lists who have min
+          if the index > list.size()
+            set it to Integer.MAX_VALUE
+          //Exit conditon
+          if(min  = Integer.MAX_VALUE)
+            This indicates all the lists have been exhausted
+            hence the function terminates
+          }
+          */
     private static LinkedList<Integer> daatOr(ArrayList<LinkedList<Integer>> iteratorList) throws Exception{
         LinkedList<Integer> result = new LinkedList<>();
         Integer[] nums = new Integer[iteratorList.size()];
@@ -375,7 +493,8 @@ public class CSE535Assignment{
         return result;
     }
 
-    // Returns postings for the given list of term, for non-existent term , returns empty list
+    // Returns postings for the given list of terms, for non-existent term , returns empty list
+    // internally calls getPostings()
     private static Map<String, Map<String, LinkedList<Integer>>> getTermPostings(String[] terms)throws Exception{
         Map<String, Map<String, LinkedList<Integer>>> termPostings = new HashMap<>();
         Map<String, LinkedList<Integer>> postings;
@@ -388,6 +507,7 @@ public class CSE535Assignment{
     }
 
     // Returns postings for a given term , null for non-existent term
+    // called by getTermPostings
     private static Map<String, LinkedList<Integer>> getPostings(String term){
         StringBuilder result = new StringBuilder();
         Map<String, LinkedList<Integer>> response = new HashMap<>();
@@ -444,7 +564,7 @@ public class CSE535Assignment{
             return true;
         }return false;}
 
-    // Takes the input file, performs few safety checks and build the posting lists
+    // Takes the input file, performs few safety checks and builds the posting lists
     private static void readInputAndBuildIndexFile(String postingsFile) throws Exception{
         String currentLine, term;
         int postingSize;
