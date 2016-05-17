@@ -49,19 +49,19 @@ def getTweets(queryString, fromDate, toDate):
 	tweetResult = []
 	
 	# Querying for English tweets
-	tweets = tweepyAPI.search(q=queryString,include_entities=True,lang='en', since='2015-09-'+fromDate,until="2015-09-"+toDate,count=100)
+	tweets = tweepyAPI.search(q=queryString,include_entities=True,lang='en', geocode= "40,-73,200km", since='2016-03-'+fromDate,until="2016-03-"+toDate,count=100)
 	tweetResult += tweets['statuses']
 
 	# Querying for german tweets
 	#Berlin- 52.533028,13.388744,20km
-	tweets = tweepyAPI.search(q=queryString,include_entities=True, lang='de', since='2015-09-'+fromDate,until='2015-09-'+toDate,count=100)#,geocode="51.426129,10.267352,1500km")
-	tweetResult += tweets['statuses']
+	##tweets = tweepyAPI.search(q=queryString,include_entities=True, lang='de', since='2015-09-'+fromDate,until='2015-09-'+toDate,count=100)#,geocode="51.426129,10.267352,1500km")
+	#tweetResult += tweets['statuses']
 
 	# Querying for Russian tweets
 	#Moscow - 55.601328,38.034511,500km
-	tweets = tweepyAPI.search(q=queryString,include_entities=True,lang='ru', since='2015-09-'+fromDate,until='2015-09-'+toDate,count=100)#,geocode="60.477265, 92.614585,1500km")
-	tweetResult += tweets['statuses']
-
+	#tweets = tweepyAPI.search(q=queryString,include_entities=True,lang='ru', since='2015-09-'+fromDate,until='2015-09-'+toDate,count=100)#,geocode="60.477265, 92.614585,1500km")
+	#tweetResult += tweets['statuses']
+	print(tweetResult)
 	return tweetResult
 
 # Extract hashtags out of tweet
@@ -136,12 +136,12 @@ def main():
 	twts = []
 	setupAuthKeys(sys.argv[1])
 	setupTweepyAPI()
-	queryString = sys.argv[2]
-	fromDate = sys.argv[3]
-	toDate = str(int(fromDate)+1)
+	queryString = "apartment OR CONDO AND rent" #sys.argv[2]
+	fromDate = "03"
+	toDate = "04"#str(int(fromDate)+1)
 	tweets = getTweets(queryString, fromDate, toDate)
-	for tweet in tweets:
-		processTweet(tweet)
+	#for tweet in tweets:
+#		processTweet(tweet)
 	writeTweetsToFile(queryString,fromDate,toDate,tweets)
 
 
